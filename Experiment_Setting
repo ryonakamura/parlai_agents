@@ -1,0 +1,105 @@
+Experiment Setting
+
+
+
+# RNNAgent by PyTorch
+python examples/train_model.py -m parlai.parlai_agents.pytorch_rnn.pytorch_rnn:RNNAgent -t babi:All10k -mf './parlai/parlai_agents/pytorch_rnn/model_file/babi_all10k_rnn' -e 100 -rnn GRU -bs 32 -hs 64 -nl 2 -lr 0.5 -dr 0.2 -ltim 10 -vtim 300 --gpu 0
+
+# RNNAgent by Chainer
+python examples/train_model.py -m parlai.parlai_agents.chainer_rnn.chainer_rnn:RNNAgent -t babi:All10k -mf './parlai/parlai_agents/chainer_rnn/model_file/babi_all10k_rnn' -e 100 -rnn GRU -bs 32 -hs 64 -nl 2 -lr 0.5 -dr 0.2 -ltim 10 -vtim 300 --gpu 1
+
+# RNNAgent by TensorFlow
+python examples/train_model.py -m parlai.parlai_agents.tensorflow_rnn.tensorflow_rnn:RNNAgent -t babi:All10k -mf './parlai/parlai_agents/tensorflow_rnn/model_file/babi_all10k_rnn' -e 100 -rnn GRU -bs 32 -hs 64 -nl 2 -lr 0.5 -dr 0.2 -ltim 10 -vtim 300 --gpu 0
+
+
+
+# AttentionAgent by PyTorch
+
+
+
+# seq2seq
+python examples/train_model.py -m parlai.parlai_agents.pytorch_attention.pytorch_attention:AttentionAgent -t babi:All10k -mf './parlai/parlai_agents/pytorch_attention/model_file/babi_all10k_s2s' -e 100 -rnn GRU -bi True -atte False -tf 1. -bs 32 -hs 64 -nl 2 -lr 0.5 -dr 0.2 -ltim 10 -vtim 300 --gpu 1
+
+# Attention (General)
+python examples/train_model.py -m parlai.parlai_agents.pytorch_attention.pytorch_attention:AttentionAgent -t babi:All10k -mf './parlai/parlai_agents/pytorch_attention/model_file/babi_all10k_atte' -e 100 -rnn GRU -bi True -atte True -sf general -tf 1. -bs 32 -hs 64 -nl 2 -lr 0.5 -dr 0.2 -ltim 10 -vtim 300 --gpu 0
+
+# Attention (Context Only)
+python examples/train_model.py -m parlai.parlai_agents.pytorch_attention.pytorch_attention:AttentionAgent -t babi:All10k -mf './parlai/parlai_agents/pytorch_attention/model_file/babi_all10k_atte_cont' -e 100 -rnn GRU -bi True -atte True -cont True -sf general -tf 1. -bs 32 -hs 64 -nl 2 -lr 0.5 -dr 0.2 -ltim 10 -vtim 300 --gpu 0
+
+# seq2seq (No Dropout)
+python examples/train_model.py -m parlai.parlai_agents.pytorch_attention.pytorch_attention:AttentionAgent -t babi:All10k -mf './parlai/parlai_agents/pytorch_attention/model_file/babi_all10k_s2s_no_drop' -e 100 -rnn GRU -bi True -atte False -tf 1. -bs 32 -hs 64 -nl 2 -lr 0.5 -dr 0.0 -ltim 10 -vtim 300 --gpu 0
+
+# seq2seq (No Bidirectional Encoder)
+python examples/train_model.py -m parlai.parlai_agents.pytorch_attention.pytorch_attention:AttentionAgent -t babi:All10k -mf './parlai/parlai_agents/pytorch_attention/model_file/babi_all10k_s2s_no_bi' -e 100 -rnn GRU -bi False -atte False -tf 1. -bs 32 -hs 64 -nl 2 -lr 0.5 -dr 0.2 -ltim 10 -vtim 300 --gpu 1
+
+# seq2seq (1 Layer)
+python examples/train_model.py -m parlai.parlai_agents.pytorch_attention.pytorch_attention:AttentionAgent -t babi:All10k -mf './parlai/parlai_agents/pytorch_attention/model_file/babi_all10k_s2s_1_layer' -e 100 -rnn GRU -bi True -atte False -tf 1. -bs 32 -hs 64 -nl 1 -lr 0.5 -dr 0.2 -ltim 10 -vtim 300 --gpu 0
+
+# seq2seq (3 Layer)
+python examples/train_model.py -m parlai.parlai_agents.pytorch_attention.pytorch_attention:AttentionAgent -t babi:All10k -mf './parlai/parlai_agents/pytorch_attention/model_file/babi_all10k_s2s_3_layer' -e 100 -rnn GRU -bi True -atte False -tf 1. -bs 32 -hs 64 -nl 3 -lr 0.5 -dr 0.2 -ltim 10 -vtim 300 --gpu 0
+
+# seq2seq (4 Layer)
+python examples/train_model.py -m parlai.parlai_agents.pytorch_attention.pytorch_attention:AttentionAgent -t babi:All10k -mf './parlai/parlai_agents/pytorch_attention/model_file/babi_all10k_s2s_4_layer' -e 100 -rnn GRU -bi True -atte False -tf 1. -bs 32 -hs 64 -nl 4 -lr 0.5 -dr 0.2 -ltim 10 -vtim 300 --gpu 1
+
+# seq2seq (LSTM)
+python examples/train_model.py -m parlai.parlai_agents.pytorch_attention.pytorch_attention:AttentionAgent -t babi:All10k -mf './parlai/parlai_agents/pytorch_attention/model_file/babi_all10k_s2s_lstm' -e 100 -rnn LSTM -bi True -atte False -tf 1. -bs 32 -hs 64 -nl 2 -lr 0.5 -dr 0.2 -ltim 10 -vtim 300 --gpu 1
+
+
+
+# MemN2NAgent by Chainer
+
+
+
+# MemN2N (Linear Start)
+python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:All10k -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi_all10k_memn2n_ls' -e 100 -bs 32 -hs 64 -ms 50 -nl 3 -wt Adjacent -pe True -te True -rn False -ls True -opt Adam -lr 0.001 -ltim 10 -vtim 1200 -vp 3 --gpu 1
+
+python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:All10k -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi_all10k_memn2n_ls' -e 100 -bs 32 -hs 64 -ms 50 -nl 3 -wt Adjacent -pe True -te True -rn False -ls False -opt Adam -lr 0.001 -ltim 10 -vtim 1200 -vp 3 --gpu 1
+
+# MemN2N (Random Noise)
+python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:All10k -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi_all10k_memn2n_rn_no_ls' -e 100 -bs 32 -hs 64 -ms 55 -nl 3 -wt Adjacent -pe True -te True -rn True -ls False -opt Adam -lr 0.001 -ltim 10 -vtim 1800 -vp 3 --gpu 1
+
+# MemN2N (Adjacent)
+python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:All10k -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi_all10k_memn2n_adj_no_ls' -e 100 -bs 32 -hs 64 -ms 50 -nl 3 -wt Adjacent -pe True -te True -rn False -ls False -opt Adam -lr 0.001 -ltim 10 -vtim 1800 -vp 3 --gpu 1
+
+# MemN2N (Layer-wise)
+python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:All10k -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi_all10k_memn2n_lw_no_ls' -e 100 -bs 32 -hs 64 -ms 50 -nl 3 -wt Layer-wise -pe True -te True -rn False -ls False -opt Adam -lr 0.001 -ltim 10 -vtim 1800 -vp 3 --gpu 0
+
+# MemN2N (Nothing = No weight tying)
+python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:All10k -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi_all10k_memn2n_no_wt_no_ls' -e 100 -bs 32 -hs 64 -ms 50 -nl 3 -wt Nothing -pe True -te True -rn False -ls False -opt Adam -lr 0.001 -ltim 10 -vtim 1800 -vp 3 --gpu 1
+
+python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:All10k -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi_all10k_memn2n_no_wt_no_ls_H' -e 100 -bs 32 -hs 64 -ms 50 -nl 3 -wt Nothing -pe True -te True -rn False -ls False -opt Adam -lr 0.001 -ltim 10 -vtim 1800 -vp 3 --gpu 1
+
+# MemN2N (SGD with Annealing)
+python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:All10k -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi_all10k_memn2n_sgd_no_ls' -e 100 -bs 32 -hs 64 -ms 50 -nl 3 -wt Adjacent -pe True -te True -rn False -ls False -opt SGD -lr 0.01 -ltim 10 -vtim 1800 -vp 3 --gpu 0
+
+python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:All10k -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi_all10k_memn2n_sgd_no_ls' -e 100 -bs 32 -hs 64 -ms 50 -nl 3 -wt Adjacent -pe True -te True -rn False -ls False -opt SGD -lr 0.005 -ltim 10 -vtim 1800 -vp 3 --gpu 0
+
+python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:All10k -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi_all10k_memn2n_sgd_no_ls' -e 100 -bs 32 -hs 64 -ms 50 -nl 3 -wt Adjacent -pe True -te True -rn False -ls False -opt SGD -lr 0.001 -ltim 10 -vtim 1800 -vp 3 --gpu 0
+
+# MemN2N (6 hops)
+python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:All10k -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi_all10k_memn2n_6_hop_no_ls' -e 100 -bs 32 -hs 64 -ms 50 -nl 6 -wt Adjacent -pe True -te True -rn False -ls False -opt Adam -lr 0.001 -ltim 10 -vtim 1800 -vp 3 --gpu 0
+
+# MemN2N (5 hops)
+python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:All10k -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi_all10k_memn2n_5_hop_no_ls' -e 100 -bs 32 -hs 64 -ms 50 -nl 5 -wt Adjacent -pe True -te True -rn False -ls False -opt Adam -lr 0.001 -ltim 10 -vtim 1800 -vp 3 --gpu 0
+
+# MemN2N (4 hops)
+python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:All10k -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi_all10k_memn2n_4_hop_no_ls' -e 100 -bs 32 -hs 64 -ms 50 -nl 4 -wt Adjacent -pe True -te True -rn False -ls False -opt Adam -lr 0.001 -ltim 10 -vtim 1800 -vp 3 --gpu 0
+
+# MemN2N (2 hops)
+python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:All10k -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi_all10k_memn2n_2_hop_no_ls' -e 100 -bs 32 -hs 64 -ms 50 -nl 2 -wt Adjacent -pe True -te True -rn False -ls False -opt Adam -lr 0.001 -ltim 10 -vtim 1800 -vp 3 --gpu 1
+
+# MemN2N (1 hop)
+python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:All10k -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi_all10k_memn2n_1_hop_no_ls' -e 100 -bs 32 -hs 64 -ms 50 -nl 1 -wt Adjacent -pe True -te True -rn False -ls False -opt Adam -lr 0.001 -ltim 10 -vtim 1800 -vp 3 --gpu 0
+
+# MemN2N (No Position Encoding)
+python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:All10k -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi_all10k_memn2n_no_pe_ls' -e 100 -bs 32 -hs 64 -ms 50 -nl 3 -wt Adjacent -pe False -te True -rn False -ls False -opt Adam -lr 0.001 -ltim 10 -vtim 1800 -vp 3 --gpu 0
+
+# MemN2N (No Position Encoding and No Temporal Encoding)
+python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:All10k -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi_all10k_memn2n_no_pe_te_ls' -e 100 -bs 32 -hs 64 -ms 50 -nl 3 -wt Adjacent -pe False -te False -rn False -ls False -opt Adam -lr 0.001 -ltim 10 -vtim 1800 -vp 3 --gpu 1
+
+# MemN2N (Best Setting)
+python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:All10k -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi_all10k_memn2n_best_no_ls' -e 100 -bs 32 -hs 128 -ms 55 -nl 5 -wt Nothing -pe True -te True -rn True -ls False -opt Adam -lr 0.001 -ltim 10 -vtim 1800 -vp 3 --gpu 0
+
+python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:All10k -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi_all10k_memn2n_best_no_ls' -e 100 -bs 32 -hs 128 -ms 55 -nl 5 -wt Nothing -pe True -te True -rn True -ls False -opt Adam -lr 0.0005 -ltim 10 -vtim 1800 -vp 3 --gpu 0
+
+python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:All10k -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi_all10k_memn2n_best_no_ls' -e 100 -bs 32 -hs 128 -ms 55 -nl 5 -wt Nothing -pe True -te True -rn True -ls False -opt Adam -lr 0.00025 -ltim 10 -vtim 1800 -vp 3 --gpu 0

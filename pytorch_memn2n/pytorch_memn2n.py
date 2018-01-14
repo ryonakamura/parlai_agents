@@ -1,7 +1,7 @@
 # ParlAI MemN2NAgent by PyTorch
 # 
 # Auther: Ryo Nakamura @ Master's student at NAIST in Japan
-# Date: 2018/01/10
+# Date: 2018/01/15
 # Contact: @_Ryobot on Twitter (faster than other methods)
 #          nakamura.ryo.nm8[at]is.naist.jp
 # Project: https://github.com/ryonakamura/parlai_agents
@@ -22,7 +22,6 @@ import copy
 import os
 import random
 import pprint
-import json
 import pickle
 
 

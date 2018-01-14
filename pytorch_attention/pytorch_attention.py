@@ -13,15 +13,15 @@ from parlai.core.agents import Agent
 from parlai.core.dict import DictionaryAgent
 from parlai.parlai_agents.save.save import SaveAgent
 
+import torch
+import torch.nn as nn
 from torch.autograd import Variable
 from torch import optim
-import torch.nn as nn
-import torch
 import numpy as np
 import copy
 import os
 import random
-import json
+import pickle
 
 
 class AttentionAgent(Agent):
@@ -494,9 +494,8 @@ class AttentionAgent(Agent):
         with open(path, 'wb') as write:
             torch.save(model, write)
         self.saver.loss(save=True)
-        with open(path + '.opt', 'w') as write:
-            opt = {"options": self.opt}
-            json.dump(opt, write, indent=4)
+        with open(path + '.opt', 'wb') as write:
+            pickle.dump(self.opt, write)
 
     def load(self, path):
         with open(path, 'rb') as read:
@@ -505,6 +504,6 @@ class AttentionAgent(Agent):
             var.load_state_dict(model[name])
 
     def get_opt(self, path):
-        with open(path, 'rb') as read:
-            model = torch.load(read)
+        with open(path + '.opt', 'rb') as read:
+            opt = pickle.load(read)
             return model['opt']

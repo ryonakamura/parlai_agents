@@ -13,16 +13,15 @@ from parlai.core.agents import Agent
 from parlai.core.dict import DictionaryAgent
 from parlai.parlai_agents.save.save import SaveAgent
 
-import numpy as np
 import chainer
 from chainer import cuda
 import chainer.functions as F
 import chainer.links as L
+import numpy as np
 import copy
 import os
 import random
 import pprint
-import json
 import pickle
 
 

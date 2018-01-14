@@ -10,6 +10,7 @@ Currently, the following agents are implemented in this repository.
 - RNNAgent by TensorFlow
 - AttentionAgent (seq2seq with Attention) by PyTorch
 - MemN2NAgent (End-To-End Memory Networks) by Chainer
+- MemN2NAgent (End-To-End Memory Networks) by PyTorch __New!__
 - SaveAgent (Save losses and attention weights)
 - visualization.ipynb (visualize valid and test results, losses and attention weights)
 
@@ -183,9 +184,18 @@ The meaning of the additional arguments are as follows.
 - `-ls`: if True, use a Linear Start (remove softmax for the memory layers)
 - `-opt`: select optimizer from SGD, AdaGrad, Adam
 
+Chainer version  
+
 ```bash
 cd ~/ParlAI
-python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:Task1k:1 -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi1' -e 100 -bs 32 -hs 20 -ms 50 -nl 3 -wt Adjacent -pe True -te True -rn True -ls False -opt Adam -lr 0.005 -ltim 2 -vtim 60 -vp -1
+python examples/train_model.py -m parlai.parlai_agents.chainer_memn2n.chainer_memn2n:MemN2NAgent -t babi:Task1k:1 -mf './parlai/parlai_agents/chainer_memn2n/model_file/babi1' -e 100 -bs 32 -hs 20 -ms 50 -nl 3 -wt Adjacent -pe True -te True -rn True -ls False -opt Adam -lr 0.05 -ltim 2 -vtim 60 -vp -1
+```
+
+PyTorch version  
+
+```bash
+cd ~/ParlAI
+python examples/train_model.py -m parlai.parlai_agents.pytorch_memn2n.pytorch_memn2n:MemN2NAgent -t babi:Task1k:1 -mf './parlai/parlai_agents/pytorch_memn2n/model_file/babi1' -e 100 -bs 32 -hs 20 -ms 50 -nl 3 -wt Adjacent -pe True -te True -rn True -ls False -opt Adam -lr 0.05 -ltim 2 -vtim 60 -vp -1
 ```
 
 ### Outperform the Results of the Paper!

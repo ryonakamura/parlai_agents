@@ -1,7 +1,7 @@
-# ParlAI MemN2NAgent by Chainer
+# ParlAI MemN2NAgent by PyTorch
 # 
 # Auther: Ryo Nakamura @ Master's student at NAIST in Japan
-# Date: 2017/10/18
+# Date: 2018/01/10
 # Contact: @_Ryobot on Twitter (faster than other methods)
 #          nakamura.ryo.nm8[at]is.naist.jp
 # Project: https://github.com/ryonakamura/parlai_agents
@@ -13,11 +13,11 @@ from parlai.core.agents import Agent
 from parlai.core.dict import DictionaryAgent
 from parlai.parlai_agents.save.save import SaveAgent
 
+import torch
+import torch.nn as nn
+from torch.autograd import Variable
+from torch import optim
 import numpy as np
-import chainer
-from chainer import cuda
-import chainer.functions as F
-import chainer.links as L
 import copy
 import os
 import random
@@ -26,7 +26,7 @@ import json
 import pickle
 
 
-class MemN2NAgent(Agent, chainer.Chain):
+class MemN2NAgent(Agent):
 
     @staticmethod
     def add_cmdline_args(argparser):
@@ -70,22 +70,18 @@ class MemN2NAgent(Agent, chainer.Chain):
             # self.opt = self.get_opt(opt['model_file'])
 
             # cuda
-            opt['cuda'] = not opt['no_cuda'] and chainer.cuda.available
-            global xp
+            opt['cuda'] = not opt['no_cuda'] and torch.cuda.is_available()
             if opt['cuda']:
                 print('[ Using CUDA ]')
-                cuda.get_device(opt['gpu']).use()
-                xp = cuda.cupy
-            else:
-                xp = np
+                torch.cuda.set_device(opt['gpu'])
 
             # dictionary (null: 0, end: 1, unk: 2, start: 3)
             self.id = 'MemN2N'
             self.dict = DictionaryAgent(opt)
             self.sos = self.dict.start_token
-            self.sos_lt = xp.array(self.dict.txt2vec(self.sos)).astype(xp.int32)
+            self.sos_lt = torch.LongTensor(self.dict.txt2vec(self.sos))
             self.eos = self.dict.end_token
-            self.eos_lt = xp.array(self.dict.txt2vec(self.eos)).astype(xp.int32)
+            self.eos_lt = torch.LongTensor(self.dict.txt2vec(self.eos))
             self.null = self.dict.null_token
 
             # model settings
@@ -104,16 +100,9 @@ class MemN2NAgent(Agent, chainer.Chain):
             hs = self.hidden_size
             ms = self.memory_size
             nl = self.num_layers
-
-            init = chainer.initializers.Normal(scale=0.05)
-            # mean is 0 and standard deviation is scale
-            # init = chainer.initializers.Uniform(scale=0.05)
-            # low is -scale and high is scale
             
             # params
-            super(Agent, self).__init__()
-            self.embeddings = []
-            self.temp_encs = []
+            self.params = {}
 
             # No weight tying
             if self.weight_tying == 'Nothing':
@@ -126,22 +115,29 @@ class MemN2NAgent(Agent, chainer.Chain):
             # Layer-wise (RNN-like) weight tying
             elif self.weight_tying == 'Layer-wise':
                 mat_num = 2 # [(A1, A2, ..., Ak), (C1, C2, ..., Ck)]
-                super(Agent, self).add_link('H', L.Linear(hs, hs, initialW=init))
+                self.H = nn.Linear(hs, hs)
+                self.params['H'] = self.H
+
+            self.embeddings = []
+            self.temp_encs = []
 
             for i in range(1, mat_num+1):
                 # E* is used for embedding matrix A and C.
-                self.embeddings += [('E%d' % i, L.EmbedID(vs, hs, initialW=init))]
+                self.embeddings += [('E%d' % i, nn.Embedding(vs, hs,
+                            padding_idx=0, scale_grad_by_freq=True))]
                 # T* is used for Temporal Encoding.
-                self.temp_encs += [('T%d' % i, L.EmbedID(ms, hs, initialW=init))]
+                self.temp_encs += [('T%d' % i, nn.Embedding(ms, hs,
+                            padding_idx=0, scale_grad_by_freq=True))]
 
-            for embed, temp in zip(self.embeddings, self.temp_encs):
-                super(Agent, self).add_link(*embed)
-                super(Agent, self).add_link(*temp)
+            for e, t in zip(self.embeddings, self.temp_encs):
+                self.params[e[0]] = e[1]
+                self.params[t[0]] = t[1]
 
             # No weight tying
             if self.weight_tying == 'Nothing':
-                super(Agent, self).add_link('B', L.EmbedID(vs, hs, initialW=init))
-                super(Agent, self).add_link('W', L.EmbedID(vs, hs, initialW=init))
+                self.B = nn.Embedding(vs, hs,
+                                padding_idx=0, scale_grad_by_freq=True)
+                self.W = nn.Linear(hs, vs)
 
             # Adjacent and Layer-wise weight tying
             if self.weight_tying in ['Adjacent', 'Layer-wise']:
@@ -151,37 +147,59 @@ class MemN2NAgent(Agent, chainer.Chain):
 
                 # Matrix W in the projection layer shares weight with
                 # memory embedding matrix Ek in the last layer.
-                self.W = self.embeddings[-1][1]
+                self.W = nn.Linear(hs, vs)
+                self.W.weight = self.embeddings[-1][1].weight
+                # FYI: https://discuss.pytorch.org/t/
+                # how-to-create-model-with-sharing-weight/398
+
+            self.params['B'] = self.B
+            self.params['W'] = self.W
 
             # Doubles the hidden layer to generate two words.
-            super(Agent, self).add_link('double', L.Linear(hs, hs*2, initialW=init))
+            self.double = nn.Linear(hs, hs*2)
+            self.params['double'] = self.double
+
+            # Initialize the weights
+            for var in self.params.values():
+                nn.init.normal(var.weight.data, mean=0, std=0.05)
+                # nn.init.uniform(var.weight.data, a=-0.05, b=0.05)
+                # nn.init.xavier_normal(var.weight.data)
 
             # debug
             if True:
                 pp = pprint.PrettyPrinter(indent=4)
                 print("\n\nparam:")
-                pp.pprint([l for l in super(Agent, self).namedlinks()]) # namedparams
-                w = self.B.W.data
-                print("param 'B':\n", w)
-                print("max:", np.max(w))
-                print("min:", np.min(w))
-                print("mean:", np.mean(w))
-                print("var:", np.var(w))
-                print("hist:", np.histogram(w, bins=[-1,-0.5,0,0.5,1]))
-                print("hist:", np.histogram(w, bins=[-0.1,-0.05,0,0.05,0.1]))
+                pp.pprint(self.params)
+                w = self.params['B'].weight.data
+                print("param 'B':", w)
+                print("max:", torch.max(w))
+                print("min:", torch.min(w))
+                print("mean:", torch.mean(w))
+                print("var:", torch.var(w))
+                print("hist:", np.histogram(w.numpy(), bins=[-1,-0.5,0,0.5,1]))
+                print("hist:", np.histogram(w.numpy(), bins=[-0.1,-0.05,0,0.05,0.1]))
 
             # funcs
-            self.loss = F.softmax_cross_entropy
+            self.softmax = nn.Softmax()
+            self.log_softmax = nn.LogSoftmax()
+            self.nll_loss = nn.NLLLoss()
+
+            self.funcs = [self.softmax, self.log_softmax, self.nll_loss]
 
             # optims
-            if self.optimizer_type == 'SGD':
-                self.optimizer = chainer.optimizers.SGD(lr=self.learning_rate)
-            elif self.optimizer_type == 'AdaGrad':
-                self.optimizer = chainer.optimizers.AdaGrad(lr=self.learning_rate)
-            elif self.optimizer_type == 'Adam':
-                self.optimizer = chainer.optimizers.Adam(alpha=self.learning_rate)
-            self.optimizer.setup(self)
-            # self.optimizer.add_hook(chainer.optimizer.GradientClipping(5))
+            self.optims = {}
+            lr = self.learning_rate
+            for name, var in self.params.items():
+                # torch.nn.utils.clip_grad_norm(var.parameters(), 1)
+                if self.optimizer_type == 'SGD':
+                    self.optims[name] = optim.SGD(var.parameters(), lr=lr)
+                elif self.optimizer_type == 'AdaGrad':
+                    self.optims[name] = optim.Adagrad(var.parameters(), lr=lr)
+                elif self.optimizer_type == 'Adam':
+                    self.optims[name] = optim.Adam(var.parameters(), lr=lr)
+                else:
+                    raise ValueError("""An invalid option for `-opt` was supplied,
+                                    options are ['SGD', 'AdaGrad', 'Adam']""")
 
             # others
             self.saver = SaveAgent(opt)
@@ -199,19 +217,24 @@ class MemN2NAgent(Agent, chainer.Chain):
         self.episode_done = True
 
     def cuda(self):
-        self.to_gpu()
+        for var in self.params.values():
+            var.cuda()
+        for var in self.funcs:
+            var.cuda()
 
     def txt2vec(self, txt):
-        return xp.array(self.dict.txt2vec(txt)).astype(xp.int32)
+        return torch.LongTensor(self.dict.txt2vec(txt))
 
     def vec2txt(self, vec):
         return self.dict.vec2txt(vec)
 
     def zero_grad(self):
-        self.optimizer.target.cleargrads()
+        for optimizer in self.optims.values():
+            optimizer.zero_grad()
 
     def update_params(self):
-        self.optimizer.update()
+        for optimizer in self.optims.values():
+            optimizer.step()
 
     def observe(self, observation):
         observation = copy.deepcopy(observation)
@@ -231,47 +254,58 @@ class MemN2NAgent(Agent, chainer.Chain):
 
     def _position_encoding(self, xs):
         # Making l for Position Encoding
-        if xs.data.ndim == 2: # if xs is question
-            bs, ss = xs.data.shape[:]
-            xs = xs.reshape((bs, 1, ss))
-        bs, ms, ss = xs.data.shape[:]
+        if xs.dim() == 2: # if xs is question
+            bs, ss = xs.size()
+            xs = xs.view(bs, 1, ss)
+        bs, ms, ss = xs.size()
         hs = self.hidden_size
         # Make k
-        k = xp.arange(1, hs + 1, dtype=xp.float32)
-        k = k.reshape((1, hs)) # 1 x hidden
-        # Make l
-        l = xp.ones((bs, ms, ss, hs)).astype(xp.float32)
-        for _x, x in enumerate(xs.data):
+        k = torch.arange(1, hs + 1)
+        k = k.view(1, hs) # 1 x hidden
+        # Make pe
+        pe = torch.ones(bs, ms, ss, hs)
+        for _x, x in enumerate(xs):
             for _s, s in enumerate(x):
                 # Make J
-                J = xp.count_nonzero(s)
-                if J != 0:
+                try:
+                    J = torch.nonzero(s.data).size(0)
                     # Make j
-                    j = xp.arange(1, J + 1, dtype=xp.float32)
-                    j = j.reshape((J, 1)) # non-0 sequence x 1
+                    j = torch.arange(1, J + 1)
+                    j = j.view(J, 1) # non-0 sequence x 1
                     # Make l
-                    _l = (1 - j / J) - (k / hs) * (1 - 2 * j / J)
-                    l[_x, _s, :J, :] = _l
-        return l
+                    l = (1 - j / J) - (k / hs) * (1 - 2 * j / J)
+                    pe[_x, _s, :J, :] = l
+                except:
+                    pass
+        if self.use_cuda:
+            pe = pe.cuda(async=True)
+        pe = Variable(pe)
+        return pe
 
-    def _embedding(self, embed, x, l=None): # batch x memory x sequence
+    def _embedding(self, embed, x, pe=None): # batch x memory x sequence
         # If x is question, memory size rank is not exist
+        _x = x
+        if _x.dim() == 3: # if x is statements
+            bs, ms, ss = x.size()
+            x = x.view(bs*ms, ss)
         e = embed(x) # batch x memory x sequence x hidden
-        
+        if _x.dim() == 3: # if x is statements
+            e = e.view(bs, ms, ss, -1)
+
         # Position Encoding
         if self.use_position_encoding:
-            if e.data.ndim == 3: # if x is question
-                bs, ss, hs = e.data.shape[:]
-                e = e.reshape((bs, 1, ss, hs))
-            e = l * e # batch x memory x sequence x hidden
-            if e.data.shape[1] == 1: # if x is question
-                e = e.reshape((bs, ss, hs))
+            if e.dim() == 3: # if x is question
+                bs, ss, hs = e.size()
+                e = e.view(bs, 1, ss, hs)
+            e = pe * e # batch x memory x sequence x hidden
+            if e.size(1) == 1: # if x is question
+                e = e.view(bs, ss, hs)
 
-        # With negative axis, the same rank of statements or question be specified.
-        e = F.sum(e, axis=-2) # batch x memory x hidden
+        # With negative dim, the same rank of statements or question be specified.
+        e = e.sum(dim=-2) # batch x memory x hidden
         return e
 
-    def _attention(self, u, x, l, i): # batch x hidden
+    def _attention(self, u, x, i, pe=None): # u: batch x hidden
         # A and C are used for embedding matrix.
         # TA and TC are used for Temporal Encoding.
 
@@ -296,29 +330,32 @@ class MemN2NAgent(Agent, chainer.Chain):
             TA = self.temp_encs[0][1]
             TC = self.temp_encs[1][1]  
 
-        m = self._embedding(A, x, l) # m: batch x memory x hidden
-        c = self._embedding(C, x, l)
+        m = self._embedding(A, x, pe) # m: batch x memory x hidden
+        c = self._embedding(C, x, pe)
 
         # Temporal Encoding
         if self.use_temporal_encoding:
-            bs, ms = m.data.shape[:2]
+            bs, ms, _ = m.size()
             # e.g. np.arange(4 - 1, -1, -1) => [3 2 1 0]
-            inds = xp.arange(ms - 1, -1, -1, dtype=xp.int32)
+            inds = torch.arange(ms - 1, -1, -1, out=torch.LongTensor())
+            if self.use_cuda:
+                inds = inds.cuda(async=True)
+            inds = Variable(inds)
             tm = TA(inds) # tm: memory x hidden
             tc = TC(inds)
-            tm = F.broadcast_to(tm, (bs,) + tm.data.shape) # batch x memory x hidden
-            tc = F.broadcast_to(tc, (bs,) + tc.data.shape)
-            m = m + tm
-            c = c + tc
+            m = m + tm.expand_as(m) # batch x memory x hidden
+            c = c + tm.expand_as(c)
         
-        c = F.swapaxes(c, 2, 1) # c: batch x hidden x memory
-        p = F.batch_matmul(m, u) # p: batch x memory x 1
+        c = c.permute(0,2,1)
+        p = torch.bmm(m, u.unsqueeze(2)) # p: batch x memory x 1
 
         # Linear Start
         if not self.use_linear_start:
-            p = F.softmax(p)
+            p = p.squeeze(2)
+            p = self.softmax(p)
+            p = p.unsqueeze(2)
 
-        o = F.batch_matmul(c, p) # o: batch x hidden x 1
+        o = torch.bmm(c, p) # o: batch x hidden x 1
         o = o[:, :, 0] # o: batch x hidden
 
         # Layer-wise (RNN-like) weight tying
@@ -330,50 +367,49 @@ class MemN2NAgent(Agent, chainer.Chain):
         # debug
         if False:
             print("a:",[round(i[0],4) for i in p[0].data.tolist()])
-        
+
         if not self.save_atte_done:
-            self.attn_weight.append(F.squeeze(p, axis=2).data)
+            self.attn_weight.append(p.squeeze(2).data)
         return u # batch x hidden
 
     def _forward(self, x, q, drop=False):
-        bs = len(x.data)
+        bs = x.size(0)
         nl = self.num_layers
-        l = None
+        pe = None
 
         if self.use_position_encoding:
-            l = self._position_encoding(q)
-        u = self._embedding(self.B, q, l)
+            pe = self._position_encoding(q)
+        u = self._embedding(self.B, q, pe)
 
         if self.use_position_encoding:
-            l = self._position_encoding(x)
+            pe = self._position_encoding(x)
         for i in range(nl):
-            u = self._attention(u, x, l, i)
+            u = self._attention(u, x, i, pe)
         
         u = self.double(u)
-        us = F.split_axis(u, 2, axis=1)
-        xs = [F.linear(u, self.W.W) for u in us] # xs: [batch x vocab, batch x vocab]
-        # xs = [F.softmax(x) for x in xs]
+        us = u.chunk(2, dim=1)
+        xs = [self.log_softmax(self.W(u)) for u in us] # xs: [*(batch x vocab,)*2]
 
         preds = [[] for _ in range(bs)]
-        ids = [F.argmax(x, axis=1) for x in xs] # ids: [batch x 1, batch x 1]
+        ids = [x.max(dim=1)[1] for x in xs] # ids: [batch x 1, batch x 1]
         for i in range(2):
             for j in range(bs):
-                token = self.vec2txt([ids[i][j].data])
+                token = self.vec2txt(ids[i][j].data.tolist())
                 preds[j].append(token)
 
         return xs, preds
 
     def train(self, x, q, y):
-        with chainer.using_config('train', True):
-            self.zero_grad()
-            xs, preds = self._forward(x, q, drop=True)
-            loss = 0
-            y = F.transpose(y, axes=(1, 0)) # y: 2 x batch
-            for i in range(2):
-                loss += self.loss(xs[i], y[i])
-            loss.backward()
-            self.update_params()
-            self.saver.loss(float(loss.data))
+        self.train_step = True
+        xs, preds = self._forward(x, q, drop=True)
+        loss = 0
+        y = y.transpose(0, 1) # y: 2 x batch
+        for i in range(2):
+            loss += self.nll_loss(xs[i], y[i])
+        self.zero_grad()
+        loss.backward()
+        self.update_params()
+        self.saver.loss(float(loss.data[0]))
 
         # debug
         if False:
@@ -381,10 +417,10 @@ class MemN2NAgent(Agent, chainer.Chain):
         return preds
 
     def predict(self, x, q):
-        with chainer.using_config('train', False):
-            _, preds = self._forward(x, q)
-            if random.random() < 0.1:
-                print('prediction:', preds[0])
+        self.train_step = False
+        _, preds = self._forward(x, q)
+        if random.random() < 0.1:
+            print('prediction:', preds[0])
         return preds
 
     def batchify(self, obs):
@@ -426,40 +462,48 @@ class MemN2NAgent(Agent, chainer.Chain):
         xs = [[self.txt2vec(sent) for sent in x] for x in xs]
         x_max_len = ms # max([len(x) for x in xs])
         arr_max_len = max(max(len(arr) for arr in x) for x in xs)
-        tensor = xp.zeros((len(xs), x_max_len, arr_max_len)).astype(xp.int32)
+        lt = torch.LongTensor(len(xs), x_max_len, arr_max_len).fill_(0)
         for i, x in enumerate(xs):
             offset = ms - len(x)
             for j, arr in enumerate(x):
-                tensor[i, offset + j][:len(arr)] = arr
-        x = chainer.Variable(tensor) # batch x sentence (memory size) x word
+                if len(arr) == 0:
+                    continue
+                lt[i, offset + j][:len(arr)] = arr
+        if self.use_cuda:
+            lt = lt.cuda(async=True)
+        x = Variable(lt) # batch x sentence (memory size) x word
         
         # debug
         if False:
-            print("\n\nx:",[self.vec2txt(tensor[0][i]) for i in range(len(tensor[0]))])
+            print("\n\nx:",[self.vec2txt(lt[0][i]) for i in range(len(lt[0]))])
         
         # query
         arr_max_len = max([len(arr) for arr in qs])
-        tensor = xp.zeros((len(qs), arr_max_len)).astype(xp.int32)
+        lt = torch.LongTensor(len(qs), x_max_len).fill_(0)
         for j, arr in enumerate(qs):
-            tensor[j][:len(arr)] = arr
-        q = chainer.Variable(tensor) # batch x word
+            lt[j][:len(arr)] = arr
+        if self.use_cuda:
+            lt = lt.cuda(async=True)
+        q = Variable(lt) # batch x word
         
         # debug
         if False:
-            print("q:",self.vec2txt(tensor[0]))
+            print("q:",self.vec2txt(lt[0]))
 
         # label
         y = None
         if 'labels' in exs[0]:
             ys = [self.txt2vec(' '.join(ex['labels']))[:2] for ex in exs]
-            tensor = xp.zeros((len(ys), 2)).astype(xp.int32)
+            lt = torch.LongTensor(len(ys), 2).fill_(0)
             for j, arr in enumerate(ys):
-                tensor[j][:len(arr)] = arr
-            y = chainer.Variable(tensor) # batch x 2
+                lt[j][:len(arr)] = arr
+            if self.use_cuda:
+                lt = lt.cuda(async=True)
+            y = Variable(lt) # batch x 2
         
         # debug
         if False:
-            print("y:",self.vec2txt(tensor[0]))
+            print("y:",self.vec2txt(lt[0]))
 
         return x, q, y, ids, valid_inds
 
@@ -497,11 +541,12 @@ class MemN2NAgent(Agent, chainer.Chain):
         return self.batch_act([self.observation])[0]
 
     def save_attention(self, x, q, y, ids):
-        # x, q, y and elements of self.attn_weight are all numpy.ndarray
+        # x, q, y and elements of attn_weight are all torch.FloatTensor
         attn_weight = self.attn_weight
+        attn_weight = [a.unsqueeze(2) for a in attn_weight]
+        attn_weight = torch.cat(attn_weight, dim=2) # batch x source x layer
         if self.use_cuda:
-            attn_weight = [cuda.to_cpu(a) for a in attn_weight]
-        attn_weight = xp.array(attn_weight).transpose(1,2,0) # batch x source x layer
+            attn_weight = attn_weight.cpu()
         attn_weights = attn_weight.tolist()
         
         sources = [[self.vec2txt([c for c in s if c != 0]) for s in ex] for ex in x]
@@ -517,16 +562,24 @@ class MemN2NAgent(Agent, chainer.Chain):
         self.attn_weight = []
 
     def save(self, path=None):
+        model = {}
+        model['opt'] = self.opt
+        for name, var in self.params.items():
+            model[name] = var.state_dict()
         path = self.path if path is None else path
-        chainer.serializers.save_npz(path, self)
+        with open(path, 'wb') as write:
+            torch.save(model, write)
         self.saver.loss(save=True)
         with open(path + '.opt', 'wb') as write:
             pickle.dump(self.opt, write)
 
     def load(self, path):
-        chainer.serializers.load_npz(path, self)
+        with open(path, 'rb') as read:
+            model = torch.load(read)
+        for name, var in self.params.items():
+            var.load_state_dict(model[name])
 
     def get_opt(self, path):
         with open(path + '.opt', 'rb') as read:
             opt = pickle.load(read)
-            return opt["options"]
+            return model['opt']

@@ -143,13 +143,10 @@ class MemN2NAgent(Agent):
                 # Question sentence embedding matrix B shares weight with
                 # memory embedding matrix E1 in the first layer.
                 self.B = self.embeddings[0][1]
-                print("B",self.B.weight.size())
 
                 # Matrix W in the projection layer shares weight with
                 # memory embedding matrix Ek in the last layer.
                 self.W = nn.Linear(hs, vs)
-                print("W",self.W.weight.size())
-                print("em",self.embeddings[-1][1].weight.size())
 
                 self.W.weight = self.embeddings[-1][1].weight
                 # FYI: https://discuss.pytorch.org/t/
@@ -169,7 +166,7 @@ class MemN2NAgent(Agent):
                 # nn.init.xavier_normal(var.weight.data)
 
             # debug
-            if True:
+            if False:
                 pp = pprint.PrettyPrinter(indent=4)
                 print("\n\nparam:")
                 pp.pprint(self.params)

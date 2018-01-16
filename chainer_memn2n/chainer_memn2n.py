@@ -156,7 +156,7 @@ class MemN2NAgent(Agent, chainer.Chain):
             super(Agent, self).add_link('double', L.Linear(hs, hs*2, initialW=init))
 
             # debug
-            if True:
+            if False:
                 pp = pprint.PrettyPrinter(indent=4)
                 print("\n\nparam:")
                 pp.pprint([l for l in super(Agent, self).namedlinks()]) # namedparams

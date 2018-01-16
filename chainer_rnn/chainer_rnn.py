@@ -183,7 +183,10 @@ class RNNAgent(Agent, chainer.Chain):
 
         exs = [ex for ex in obs if 'text' in ex]
         valid_inds = [i for i, ex in enumerate(obs) if 'text' in ex]
-        
+
+        if len(exs) == 0:
+            return (None,)*3
+
         xs = [ex['text'] for ex in exs]
         xs = txt2var(xs)
         ys = None
@@ -201,6 +204,9 @@ class RNNAgent(Agent, chainer.Chain):
         batch_reply = [{'id': self.getID()} for _ in range(batchsize)]
 
         xs, ys, valid_inds = self.batchify(observations)
+
+        if xs is None:
+            return batch_reply
 
         if ys is not None:
             preds = self.train(xs, ys) # ['bedroom', ...]

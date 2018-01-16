@@ -426,7 +426,10 @@ class AttentionAgent(Agent):
         exs = [ex for ex in obs if 'text' in ex]
         ids = [ex['id'] for ex in obs if 'text' in ex]
         valid_inds = [i for i, ex in enumerate(obs) if 'text' in ex]
-        
+
+        if len(exs) == 0:
+            return (None,)*4
+
         xs = [ex['text'] for ex in exs]
         x = txt2var(xs)
         y = None
@@ -446,7 +449,7 @@ class AttentionAgent(Agent):
 
         x, y, ids, valid_inds = self.batchify(observations)
 
-        if len(x) == 0:
+        if x is None:
             return batch_reply
 
         if y is not None:

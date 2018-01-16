@@ -169,9 +169,6 @@ class MemN2NAgent(Agent, chainer.Chain):
                 print("hist:", np.histogram(w, bins=[-1,-0.5,0,0.5,1]))
                 print("hist:", np.histogram(w, bins=[-0.1,-0.05,0,0.05,0.1]))
 
-            # funcs
-            self.loss = F.softmax_cross_entropy
-
             # optims
             if self.optimizer_type == 'SGD':
                 self.optimizer = chainer.optimizers.SGD(lr=self.learning_rate)
@@ -334,7 +331,7 @@ class MemN2NAgent(Agent, chainer.Chain):
             self.attn_weight.append(F.squeeze(p, axis=2).data)
         return u # batch x hidden
 
-    def _forward(self, x, q, drop=False):
+    def _forward(self, x, q):
         bs = len(x.data)
         nl = self.num_layers
         l = None
@@ -365,11 +362,11 @@ class MemN2NAgent(Agent, chainer.Chain):
     def train(self, x, q, y):
         with chainer.using_config('train', True):
             self.zero_grad()
-            xs, preds = self._forward(x, q, drop=True)
+            xs, preds = self._forward(x, q)
             loss = 0
             y = F.transpose(y, axes=(1, 0)) # y: 2 x batch
             for i in range(2):
-                loss += self.loss(xs[i], y[i])
+                loss += F.softmax_cross_entropy(xs[i], y[i])
             loss.backward()
             self.update_params()
             self.saver.loss(float(loss.data))
@@ -394,10 +391,8 @@ class MemN2NAgent(Agent, chainer.Chain):
         ids = [ex['id'] for ex in obs if 'text' in ex]
         valid_inds = [i for i, ex in enumerate(obs) if 'text' in ex]
 
-        if 'labels' in exs[0]:
-            self.train_step = True
-        else:
-            self.train_step = False
+        if len(exs) == 0:
+            return (None,)*5
         
         # input
         ms = self.memory_size
@@ -411,7 +406,7 @@ class MemN2NAgent(Agent, chainer.Chain):
             x = [s for s, b in zip(x, x_mask) if b]
 
             # Random Noise
-            if self.train_step and self.use_random_noise:
+            if 'labels' in exs[0] and self.use_random_noise:
                 parsed_x = []
                 for s in x:
                     parsed_x.append(s)
@@ -473,11 +468,11 @@ class MemN2NAgent(Agent, chainer.Chain):
 
         x, q, y, ids, valid_inds = self.batchify(observations)
 
-        if len(x) == 0:
+        if x is None:
             return batch_reply
 
         if y is not None:
-            preds = self.train(x, q, y) # # [['bedroom', '__NULL__'], ...]
+            preds = self.train(x, q, y) # [['bedroom', '__NULL__'], ...]
             if not self.save_atte_done:
                 self.save_attention(x.data, q.data, y.data, ids)
         else:

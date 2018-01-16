@@ -143,10 +143,14 @@ class MemN2NAgent(Agent):
                 # Question sentence embedding matrix B shares weight with
                 # memory embedding matrix E1 in the first layer.
                 self.B = self.embeddings[0][1]
+                print("B",self.B.weight.size())
 
                 # Matrix W in the projection layer shares weight with
                 # memory embedding matrix Ek in the last layer.
                 self.W = nn.Linear(hs, vs)
+                print("W",self.W.weight.size())
+                print("em",self.embeddings[-1][1].weight.size())
+
                 self.W.weight = self.embeddings[-1][1].weight
                 # FYI: https://discuss.pytorch.org/t/
                 # how-to-create-model-with-sharing-weight/398
@@ -343,19 +347,18 @@ class MemN2NAgent(Agent):
             tm = TA(inds) # tm: memory x hidden
             tc = TC(inds)
             m = m + tm.expand_as(m) # batch x memory x hidden
-            c = c + tm.expand_as(c)
+            c = c + tc.expand_as(c)
         
-        c = c.permute(0,2,1)
-        p = torch.bmm(m, u.unsqueeze(2)) # p: batch x memory x 1
+        p = u.unsqueeze(1) @ m.transpose(1, 2) # p: batch x 1 x memory
 
         # Linear Start
         if not self.use_linear_start:
-            p = p.squeeze(2)
+            p = p.squeeze(1)
             p = self.softmax(p)
-            p = p.unsqueeze(2)
+            p = p.unsqueeze(1)
 
-        o = torch.bmm(c, p) # o: batch x hidden x 1
-        o = o[:, :, 0] # o: batch x hidden
+        o = p @ c # o: batch x 1 x hidden
+        o = o.squeeze(1) # o: batch x hidden
 
         # Layer-wise (RNN-like) weight tying
         if self.weight_tying == 'Layer-wise':
@@ -371,7 +374,7 @@ class MemN2NAgent(Agent):
             self.attn_weight.append(p.squeeze(2).data)
         return u # batch x hidden
 
-    def _forward(self, x, q, drop=False):
+    def _forward(self, x, q):
         bs = x.size(0)
         nl = self.num_layers
         pe = None
@@ -399,8 +402,7 @@ class MemN2NAgent(Agent):
         return xs, preds
 
     def train(self, x, q, y):
-        self.train_step = True
-        xs, preds = self._forward(x, q, drop=True)
+        xs, preds = self._forward(x, q)
         loss = 0
         y = y.transpose(0, 1) # y: 2 x batch
         for i in range(2):
@@ -416,7 +418,6 @@ class MemN2NAgent(Agent):
         return preds
 
     def predict(self, x, q):
-        self.train_step = False
         _, preds = self._forward(x, q)
         if random.random() < 0.1:
             print('prediction:', preds[0])
@@ -430,10 +431,8 @@ class MemN2NAgent(Agent):
         ids = [ex['id'] for ex in obs if 'text' in ex]
         valid_inds = [i for i, ex in enumerate(obs) if 'text' in ex]
 
-        if 'labels' in exs[0]:
-            self.train_step = True
-        else:
-            self.train_step = False
+        if len(exs) == 0:
+            return (None,)*5
         
         # input
         ms = self.memory_size
@@ -447,7 +446,7 @@ class MemN2NAgent(Agent):
             x = [s for s, b in zip(x, x_mask) if b]
 
             # Random Noise
-            if self.train_step and self.use_random_noise:
+            if 'labels' in exs[0] and self.use_random_noise:
                 parsed_x = []
                 for s in x:
                     parsed_x.append(s)
@@ -517,11 +516,11 @@ class MemN2NAgent(Agent):
 
         x, q, y, ids, valid_inds = self.batchify(observations)
 
-        if len(x) == 0:
+        if x is None:
             return batch_reply
 
         if y is not None:
-            preds = self.train(x, q, y) # # [['bedroom', '__NULL__'], ...]
+            preds = self.train(x, q, y) # [['bedroom', '__NULL__'], ...]
             if not self.save_atte_done:
                 self.save_attention(x.data, q.data, y.data, ids)
         else:

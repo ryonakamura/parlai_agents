@@ -46,7 +46,7 @@ class MemN2NAgent(Agent):
             help='if True, use a Temporal Encoding for sentence memorization')
         agent.add_argument('-rn', '--randomnoise', type='bool', default=True,
             help='if True, use a Random Noise to regularize TE')
-        agent.add_argument('-ls', '--linearstart', type='bool', default=True,
+        agent.add_argument('-ls', '--linearstart', type='bool', default=False,
             help='if True, use a Linear Start (remove softmax for the memory layers)')
         agent.add_argument('-opt', '--optimizer', type=str, default='Adam',
             help='select optimizer from SGD, AdaGrad, Adam')
@@ -147,7 +147,6 @@ class MemN2NAgent(Agent):
                 # Matrix W in the projection layer shares weight with
                 # memory embedding matrix Ek in the last layer.
                 self.W = nn.Linear(hs, vs)
-
                 self.W.weight = self.embeddings[-1][1].weight
                 # FYI: https://discuss.pytorch.org/t/
                 # how-to-create-model-with-sharing-weight/398
@@ -261,7 +260,7 @@ class MemN2NAgent(Agent):
         hs = self.hidden_size
         # Make k
         k = torch.arange(1, hs + 1)
-        k = k.view(1, hs) # 1 x hidden
+        k = k.view(1, hs) # k: 1 x hidden
         # Make pe
         pe = torch.ones(bs, ms, ss, hs)
         for _x, x in enumerate(xs):
@@ -282,13 +281,13 @@ class MemN2NAgent(Agent):
         pe = Variable(pe)
         return pe
 
-    def _embedding(self, embed, x, pe=None): # batch x memory x sequence
+    def _embedding(self, embed, x, pe=None): # x: batch x memory x sequence
         # If x is question, memory size rank is not exist
         _x = x
         if _x.dim() == 3: # if x is statements
             bs, ms, ss = x.size()
             x = x.view(bs*ms, ss)
-        e = embed(x) # batch x memory x sequence x hidden
+        e = embed(x) # e: batch x memory x sequence x hidden
         if _x.dim() == 3: # if x is statements
             e = e.view(bs, ms, ss, -1)
 
@@ -297,12 +296,12 @@ class MemN2NAgent(Agent):
             if e.dim() == 3: # if x is question
                 bs, ss, hs = e.size()
                 e = e.view(bs, 1, ss, hs)
-            e = pe * e # batch x memory x sequence x hidden
+            e = pe * e # e: batch x memory x sequence x hidden
             if e.size(1) == 1: # if x is question
                 e = e.view(bs, ss, hs)
 
         # With negative dim, the same rank of statements or question be specified.
-        e = e.sum(dim=-2) # batch x memory x hidden
+        e = e.sum(dim=-2) # e: batch x memory x hidden
         return e
 
     def _attention(self, u, x, i, pe=None): # u: batch x hidden
@@ -335,7 +334,7 @@ class MemN2NAgent(Agent):
 
         # Temporal Encoding
         if self.use_temporal_encoding:
-            bs, ms, _ = m.size()
+            _, ms, _ = m.size()
             # e.g. np.arange(4 - 1, -1, -1) => [3 2 1 0]
             inds = torch.arange(ms - 1, -1, -1, out=torch.LongTensor())
             if self.use_cuda:
@@ -343,7 +342,7 @@ class MemN2NAgent(Agent):
             inds = Variable(inds)
             tm = TA(inds) # tm: memory x hidden
             tc = TC(inds)
-            m = m + tm.expand_as(m) # batch x memory x hidden
+            m = m + tm.expand_as(m) # m: batch x memory x hidden
             c = c + tc.expand_as(c)
         
         p = u.unsqueeze(1) @ m.transpose(1, 2) # p: batch x 1 x memory
@@ -371,14 +370,14 @@ class MemN2NAgent(Agent):
             self.attn_weight.append(p.squeeze(2).data)
         return u # batch x hidden
 
-    def _forward(self, x, q):
+    def _forward(self, x, q): # x: batch x memory x word, q: batch x word
         bs = x.size(0)
         nl = self.num_layers
         pe = None
 
         if self.use_position_encoding:
             pe = self._position_encoding(q)
-        u = self._embedding(self.B, q, pe)
+        u = self._embedding(self.B, q, pe) # u: batch x hidden
 
         if self.use_position_encoding:
             pe = self._position_encoding(x)
@@ -466,7 +465,7 @@ class MemN2NAgent(Agent):
                 lt[i, offset + j][:len(arr)] = arr
         if self.use_cuda:
             lt = lt.cuda(async=True)
-        x = Variable(lt) # batch x sentence (memory size) x word
+        x = Variable(lt) # x: batch x sentence (memory size) x word
         
         # debug
         if False:
@@ -474,12 +473,12 @@ class MemN2NAgent(Agent):
         
         # query
         arr_max_len = max([len(arr) for arr in qs])
-        lt = torch.LongTensor(len(qs), x_max_len).fill_(0)
+        lt = torch.LongTensor(len(qs), arr_max_len).fill_(0)
         for j, arr in enumerate(qs):
             lt[j][:len(arr)] = arr
         if self.use_cuda:
             lt = lt.cuda(async=True)
-        q = Variable(lt) # batch x word
+        q = Variable(lt) # q: batch x word
         
         # debug
         if False:
@@ -494,7 +493,7 @@ class MemN2NAgent(Agent):
                 lt[j][:len(arr)] = arr
             if self.use_cuda:
                 lt = lt.cuda(async=True)
-            y = Variable(lt) # batch x 2
+            y = Variable(lt) # y: batch x 2
         
         # debug
         if False:

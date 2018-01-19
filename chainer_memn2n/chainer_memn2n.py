@@ -46,7 +46,7 @@ class MemN2NAgent(Agent, chainer.Chain):
             help='if True, use a Temporal Encoding for sentence memorization')
         agent.add_argument('-rn', '--randomnoise', type='bool', default=True,
             help='if True, use a Random Noise to regularize TE')
-        agent.add_argument('-ls', '--linearstart', type='bool', default=True,
+        agent.add_argument('-ls', '--linearstart', type='bool', default=False,
             help='if True, use a Linear Start (remove softmax for the memory layers)')
         agent.add_argument('-opt', '--optimizer', type=str, default='Adam',
             help='select optimizer from SGD, AdaGrad, Adam')
